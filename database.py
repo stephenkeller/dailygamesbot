@@ -199,20 +199,12 @@ async def get_bucketed_leaderboard(game_name: str, ascending: bool = False):
                 AVG(s.score) as avg_score,
                 AVG(s.raw_score) as avg_raw,
                 AVG(s.penalty) as avg_penalty,
-                CASE CAST(strftime('%w', s.puzzle_id) AS INTEGER)
-                    WHEN 0 THEN 'Sunday'
-                    WHEN 1 THEN 'Monday'
-                    WHEN 2 THEN 'Tuesday'
-                    WHEN 3 THEN 'Wednesday'
-                    WHEN 4 THEN 'Thursday'
-                    WHEN 5 THEN 'Friday'
-                    WHEN 6 THEN 'Saturday'
-                END as day_of_week
+                CAST(strftime('%w', s.puzzle_id) AS INTEGER) as dow
             FROM scores s
             JOIN users u ON s.user_id = u.user_id
-            WHERE s.game_name = ?
-            GROUP BY s.user_id, day_of_week
-            ORDER BY day_of_week, avg_score {order}
+            WHERE s.game_name = ? AND dow IS NOT NULL
+            GROUP BY s.user_id, dow
+            ORDER BY dow ASC, avg_score {order}
         ''', (game_name,))
         rows = await cursor.fetchall()
         
@@ -226,7 +218,9 @@ async def get_bucketed_leaderboard(game_name: str, ascending: bool = False):
             bucketed[day_name].append({
                 'username': row['username'],
                 'avg_score': row['avg_score'],
-                'plays': row['plays']
+                'plays': row['plays'],
+                'avg_raw': row['avg_raw'],
+                'avg_penalty': row['avg_penalty']
             })
             
     return bucketed
