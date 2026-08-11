@@ -253,3 +253,27 @@ async def get_bucketed_medal_counts(game_name: str, ascending: bool = False):
                     
     # Convert back to regular dicts
     return {user: dict(data) for user, data in medals.items()}
+
+async def delete_score(user_id: str, game_name: str, puzzle_id: str) -> bool:
+    """Deletes a specific score and returns True if a row was deleted."""
+    async with aiosqlite.connect(DB_FILE) as db:
+        cursor = await db.execute(
+            "DELETE FROM scores WHERE user_id = ? AND game_name = ? AND puzzle_id = ?",
+            (user_id, game_name, puzzle_id)
+        )
+        deleted = cursor.rowcount > 0
+        await db.commit()
+        return deleted
+
+async def get_user_scores(user_id: str, limit: int = 15):
+    """Returns the most recent scores for a specific user."""
+    async with aiosqlite.connect(DB_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute('''
+            SELECT game_name, puzzle_id, score, date
+            FROM scores
+            WHERE user_id = ?
+            ORDER BY date DESC
+            LIMIT ?
+        ''', (user_id, limit))
+        return await cursor.fetchall()

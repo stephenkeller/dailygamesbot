@@ -253,6 +253,56 @@ async def leaderboard_cmd(ctx, *, game: str = None):
         
     await ctx.send(embed=embed)
 
+def is_mod(interaction: discord.Interaction) -> bool:
+    if interaction.user.guild_permissions.administrator:
+        return True
+    if hasattr(interaction.user, "roles"):
+        return any(role.name.lower() == "mod" for role in interaction.user.roles)
+    return False
+
+@bot.tree.command(name="user_scores", description="View a user's recent score history")
+@app_commands.describe(user="The user to look up")
+async def user_scores(interaction: discord.Interaction, user: discord.Member):
+    scores = await database.get_user_scores(str(user.id))
+    if not scores:
+        await interaction.response.send_message(f"No recent scores found for {user.display_name}.", ephemeral=True)
+        return
+        
+    embed = discord.Embed(title=f"Recent Scores: {user.display_name}", color=discord.Color.blue())
+    
+    for row in scores:
+        game = row['game_name']
+        puzzle = row['puzzle_id']
+        score = row['score']
+        
+        score_display = f"{score:.0f}"
+        if game in ["Clues By Sam", "Atlantic Daily Crossword"]:
+            if score > 60:
+                score_display = f"{int(score // 60)}m {int(score % 60)}s"
+            else:
+                score_display = f"{score:.0f}s"
+                
+        embed.add_field(name=f"{game}", value=f"Puzzle: `{puzzle}`\\nScore: {score_display}", inline=False)
+        
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="remove_score", description="Mod: Remove a specific score for a user")
+@app_commands.describe(
+    user="The user whose score to remove",
+    game="The name of the game",
+    puzzle_id="The ID of the puzzle (e.g., '193' or '2026-08-08')"
+)
+async def remove_score(interaction: discord.Interaction, user: discord.Member, game: str, puzzle_id: str):
+    if not is_mod(interaction):
+        await interaction.response.send_message("You need the 'mod' role or Administrator permissions to use this command.", ephemeral=True)
+        return
+        
+    deleted = await database.delete_score(str(user.id), game, puzzle_id)
+    if deleted:
+        await interaction.response.send_message(f"✅ Removed {game} score for {user.display_name} on puzzle `{puzzle_id}`.")
+    else:
+        await interaction.response.send_message(f"❌ Could not find a {game} score for {user.display_name} on puzzle `{puzzle_id}`.", ephemeral=True)
+
 if __name__ == "__main__":
     if TOKEN:
         bot.run(TOKEN)
