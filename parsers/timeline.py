@@ -11,7 +11,7 @@ class TimelineParser(GameParser):
     def can_parse(self, text: str) -> bool:
         return "Timeline 🗓️ #" in text and "Total:" in text
 
-    def parse(self, text: str, message_date: datetime) -> Optional[Tuple[str, float]]:
+    def parse(self, text: str, message_date: datetime) -> Optional[Tuple[str, float, Optional[float], Optional[float]]]:
         # Example: 
         # Timeline 🗓️ #193
         # Total: 528/600
@@ -22,6 +22,7 @@ class TimelineParser(GameParser):
         if puzzle_match and score_match:
             puzzle_id = puzzle_match.group(1)
             score = float(score_match.group(1))
-            return puzzle_id, score
+            if puzzle_id and score is not None:
+                return puzzle_id, score, None, None
             
         return None

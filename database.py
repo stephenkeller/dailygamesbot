@@ -25,10 +25,23 @@ async def init_db():
                 game_name TEXT,
                 puzzle_id TEXT,
                 score REAL,
+                raw_score REAL,
+                penalty REAL,
                 date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, game_name, puzzle_id)
             )
         ''')
+        
+        # Migration: Add columns if table already exists
+        try:
+            await db.execute("ALTER TABLE scores ADD COLUMN raw_score REAL")
+        except aiosqlite.OperationalError:
+            pass
+            
+        try:
+            await db.execute("ALTER TABLE scores ADD COLUMN penalty REAL")
+        except aiosqlite.OperationalError:
+            pass
         
         # Migration: fix old Clues By Sam dates
         cursor = await db.execute("SELECT user_id, game_name, puzzle_id FROM scores WHERE game_name = 'Clues By Sam'")
@@ -66,7 +79,7 @@ async def init_db():
         await db.commit()
     logging.info("Database initialized.")
 
-async def record_score(user_id: str, username: str, game_name: str, puzzle_id: str, score: float):
+async def record_score(user_id: str, username: str, game_name: str, puzzle_id: str, score: float, raw_score: float = None, penalty: float = None):
     async with aiosqlite.connect(DB_FILE) as db:
         # Update user info
         await db.execute('''
@@ -75,14 +88,14 @@ async def record_score(user_id: str, username: str, game_name: str, puzzle_id: s
             ON CONFLICT(user_id) DO UPDATE SET username = excluded.username
         ''', (user_id, username))
         
-        # Insert score (if puzzle_id is already played by this user, we can either ignore or update)
-        # Let's use INSERT OR REPLACE so their latest message counts, or IGNORE so their first message counts.
-        # We will use REPLACE in case they correct their score message.
         await db.execute('''
-            INSERT INTO scores (user_id, game_name, puzzle_id, score)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id, game_name, puzzle_id) DO UPDATE SET score = excluded.score
-        ''', (user_id, game_name, puzzle_id, score))
+            INSERT INTO scores (user_id, game_name, puzzle_id, score, raw_score, penalty)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, game_name, puzzle_id) DO UPDATE SET 
+                score = excluded.score, 
+                raw_score = excluded.raw_score, 
+                penalty = excluded.penalty
+        ''', (user_id, game_name, puzzle_id, score, raw_score, penalty))
         
         await db.commit()
 
@@ -95,18 +108,14 @@ async def get_leaderboard(game_name: str, ascending: bool = False):
     order = "ASC" if ascending else "DESC"
     async with aiosqlite.connect(DB_FILE) as db:
         db.row_factory = aiosqlite.Row
-        # Average score per user, or maybe total score? 
-        # For daily games, usually we rank by average score, or total score. 
-        # For simplicity, let's just get the average score and total plays.
-        query = f'''
-            SELECT u.username, COUNT(s.id) as plays, AVG(s.score) as avg_score
+        cursor = await db.execute(f'''
+            SELECT u.username, COUNT(s.id) as plays, AVG(s.score) as avg_score, AVG(s.raw_score) as avg_raw, AVG(s.penalty) as avg_penalty
             FROM scores s
             JOIN users u ON s.user_id = u.user_id
             WHERE s.game_name = ?
-            GROUP BY u.user_id
+            GROUP BY s.user_id
             ORDER BY avg_score {order}
-        '''
-        cursor = await db.execute(query, (game_name,))
+        ''', (game_name,))
         rows = await cursor.fetchall()
         return rows
 
@@ -114,14 +123,13 @@ async def get_puzzle_leaderboard(game_name: str, puzzle_id: str, ascending: bool
     order = "ASC" if ascending else "DESC"
     async with aiosqlite.connect(DB_FILE) as db:
         db.row_factory = aiosqlite.Row
-        query = f'''
-            SELECT u.username, s.score, s.user_id
+        cursor = await db.execute(f'''
+            SELECT u.username, s.score, s.raw_score, s.penalty, s.user_id
             FROM scores s
             JOIN users u ON s.user_id = u.user_id
             WHERE s.game_name = ? AND s.puzzle_id = ?
             ORDER BY s.score {order}, s.date ASC
-        '''
-        cursor = await db.execute(query, (game_name, puzzle_id))
+        ''', (game_name, puzzle_id))
         return await cursor.fetchall()
 
 async def get_medal_counts(game_name: str, ascending: bool = False):
@@ -184,20 +192,28 @@ async def get_bucketed_leaderboard(game_name: str, ascending: bool = False):
     async with aiosqlite.connect(DB_FILE) as db:
         db.row_factory = aiosqlite.Row
         
-        # In SQLite, strftime('%w', date) returns 0-6 where 0=Sunday
-        query = f'''
+        cursor = await db.execute(f'''
             SELECT 
                 u.username, 
-                AVG(s.score) as avg_score, 
-                COUNT(s.score) as plays,
-                CAST(strftime('%w', s.puzzle_id) AS INTEGER) as dow
+                COUNT(s.id) as plays, 
+                AVG(s.score) as avg_score,
+                AVG(s.raw_score) as avg_raw,
+                AVG(s.penalty) as avg_penalty,
+                CASE CAST(strftime('%w', s.puzzle_id) AS INTEGER)
+                    WHEN 0 THEN 'Sunday'
+                    WHEN 1 THEN 'Monday'
+                    WHEN 2 THEN 'Tuesday'
+                    WHEN 3 THEN 'Wednesday'
+                    WHEN 4 THEN 'Thursday'
+                    WHEN 5 THEN 'Friday'
+                    WHEN 6 THEN 'Saturday'
+                END as day_of_week
             FROM scores s
             JOIN users u ON s.user_id = u.user_id
-            WHERE s.game_name = ? AND dow IS NOT NULL
-            GROUP BY s.user_id, dow
-            ORDER BY dow ASC, avg_score {order}
-        '''
-        cursor = await db.execute(query, (game_name,))
+            WHERE s.game_name = ?
+            GROUP BY s.user_id, day_of_week
+            ORDER BY day_of_week, avg_score {order}
+        ''', (game_name,))
         rows = await cursor.fetchall()
         
     days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -290,7 +306,7 @@ async def get_user_scores(user_id: str, limit: int = 15):
     async with aiosqlite.connect(DB_FILE) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute('''
-            SELECT game_name, puzzle_id, score, date
+            SELECT game_name, puzzle_id, score, raw_score, penalty, date
             FROM scores
             WHERE user_id = ?
             ORDER BY date DESC

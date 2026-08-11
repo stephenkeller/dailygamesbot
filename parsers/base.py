@@ -25,10 +25,9 @@ class GameParser(ABC):
         pass
 
     @abstractmethod
-    def parse(self, text: str, message_date: datetime) -> Optional[Tuple[str, float]]:
-        """
-        Parses the text and returns a tuple of (puzzle_id, score).
-        Returns None if parsing fails despite can_parse returning True.
-        message_date is provided as a fallback for puzzle_id if the text doesn't contain one.
+    def parse(self, text: str, message_date: datetime) -> Optional[Tuple[str, float, Optional[float], Optional[float]]]:
+        """Parses the text and returns a tuple of (puzzle_id, total_score, raw_score, penalty).
+           Returns None if the text could not be successfully parsed.
+           message_date is provided as a fallback for puzzle_id if the text doesn't contain one.
         """
         pass

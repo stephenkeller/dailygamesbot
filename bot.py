@@ -29,6 +29,21 @@ CHANNEL_GAME_MAP = {
     "box-office-game": "Box Office Game"
 }
 
+def format_time_val(s: float) -> str:
+    if s >= 60:
+        return f"{int(s // 60)}m {int(s % 60)}s"
+    return f"{s:.0f}s"
+
+def format_score_display(score: float, raw_score=None, penalty=None, ascending: bool=False) -> str:
+    display_val = f"{score:.0f}" if float(score).is_integer() else f"{score:.2f}"
+    if ascending:
+        display_val = format_time_val(score)
+        if penalty and float(penalty) > 0 and raw_score:
+            raw_str = format_time_val(raw_score)
+            pen_str = format_time_val(penalty)
+            display_val = f"{display_val} ({raw_str} + {pen_str} penalty)"
+    return display_val
+
 # Set up bot
 intents = discord.Intents.default()
 intents.message_content = True
@@ -57,7 +72,7 @@ async def on_message(message: discord.Message):
         if parser.can_parse(text):
             result = parser.parse(text, message.created_at)
             if result:
-                puzzle_id, score = result
+                puzzle_id, score, raw_score, penalty = result
                 if parser.game_name == "Box Office Game":
                     puzzle_id = await database.resolve_box_office_puzzle_id(puzzle_id)
                     
@@ -66,7 +81,9 @@ async def on_message(message: discord.Message):
                     message.author.display_name,
                     parser.game_name,
                     puzzle_id,
-                    score
+                    score,
+                    raw_score,
+                    penalty
                 )
                 
                 # Format score display
@@ -104,14 +121,9 @@ async def on_message(message: discord.Message):
                             
                         medal = "🥇" if current_rank == 1 else "🥈" if current_rank == 2 else "🥉" if current_rank == 3 else f"#{current_rank}"
                         
-                        display_val = f"{row['score']:.0f}" if row['score'].is_integer() else f"{row['score']:.2f}"
-                        if parser.ascending:
-                            if row['score'] > 60:
-                                mins = int(row['score'] // 60)
-                                secs = int(row['score'] % 60)
-                                display_val = f"{mins}m {secs}s"
-                            else:
-                                display_val = f"{row['score']:.0f}s"
+                        raw_score = row['raw_score'] if 'raw_score' in row.keys() else None
+                        penalty = row['penalty'] if 'penalty' in row.keys() else None
+                        display_val = format_score_display(row['score'], raw_score, penalty, parser.ascending)
                                 
                         user_str = f"**{row['username']}**" if row['user_id'] == str(message.author.id) else row['username']
                         desc += f"{medal} {user_str} : {display_val}\n"
@@ -144,13 +156,9 @@ async def build_leaderboard_embed(parser):
                 
                 day_medals = medals_data.get(username, {}).get(day, {'1st': 0, '2nd': 0, '3rd': 0})
                 day_medal_str = f"🥇{day_medals['1st']} 🥈{day_medals['2nd']} 🥉{day_medals['3rd']}"
-                
-                score_display = f"{avg_score:.1f}"
-                if parser.ascending:
-                    if avg_score > 60:
-                        score_display = f"{int(avg_score // 60)}m {int(avg_score % 60)}s"
-                    else:
-                        score_display = f"{avg_score:.0f}s"
+                avg_raw = row['avg_raw'] if 'avg_raw' in row.keys() else None
+                avg_pen = row['avg_penalty'] if 'avg_penalty' in row.keys() else None
+                score_display = format_score_display(avg_score, avg_raw, avg_pen, parser.ascending)
                         
                 rank = "🏆" if i == 0 else f"#{i+1}"
                 day_text += f"{rank} **{username}** • {day_medal_str}\nAvg: {score_display} ({plays} plays)\n\n"
@@ -168,13 +176,9 @@ async def build_leaderboard_embed(parser):
                     
                     global_medals = medals_data.get(username, {}).get('global', {'1st': 0, '2nd': 0, '3rd': 0})
                     glob_medal_str = f"🥇{global_medals['1st']} 🥈{global_medals['2nd']} 🥉{global_medals['3rd']}"
-                    
-                    score_display = f"{avg_score:.1f}"
-                    if parser.ascending:
-                        if avg_score > 60:
-                            score_display = f"{int(avg_score // 60)}m {int(avg_score % 60)}s"
-                        else:
-                            score_display = f"{avg_score:.0f}s"
+                    avg_raw = row['avg_raw'] if 'avg_raw' in row.keys() else None
+                    avg_pen = row['avg_penalty'] if 'avg_penalty' in row.keys() else None
+                    score_display = format_score_display(avg_score, avg_raw, avg_pen, parser.ascending)
                             
                     rank = "🏆" if i == 0 else f"#{i+1}"
                     global_text += f"{rank} **{username}** • {glob_medal_str}\nAvg: {score_display} ({plays} plays)\n\n"
@@ -278,16 +282,14 @@ async def user_scores(interaction: discord.Interaction, user: discord.Member):
         game = row['game_name']
         puzzle = row['puzzle_id']
         score = row['score']
+        raw_score = row['raw_score'] if 'raw_score' in row.keys() else None
+        penalty = row['penalty'] if 'penalty' in row.keys() else None
         
-        score_display = f"{score:.0f}"
-        if game in ["Clues By Sam", "Atlantic Daily Crossword"]:
-            if score > 60:
-                score_display = f"{int(score // 60)}m {int(score % 60)}s"
-            else:
-                score_display = f"{score:.0f}s"
+        is_ascending = game in ["Clues By Sam", "Atlantic Daily Crossword"]
+        score_display = format_score_display(score, raw_score, penalty, is_ascending)
                 
         display_puzzle = puzzle.split("|")[0] if "|" in puzzle else puzzle
-        embed.add_field(name=f"{game}", value=f"Puzzle: `{display_puzzle}`\\nScore: {score_display}", inline=False)
+        embed.add_field(name=f"{game}", value=f"Puzzle: `{display_puzzle}`\nScore: {score_display}", inline=False)
         
     await interaction.response.send_message(embed=embed, ephemeral=True)
 

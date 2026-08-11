@@ -11,7 +11,7 @@ class BoxOfficeParser(GameParser):
     def can_parse(self, text: str) -> bool:
         return "boxofficega.me" in text and "🏆" in text
 
-    def parse(self, text: str, message_date: datetime) -> Optional[Tuple[str, float]]:
+    def parse(self, text: str, message_date: datetime) -> Optional[Tuple[str, float, Optional[float], Optional[float]]]:
         lines = [line.strip() for line in text.split('\n') if line.strip()]
         
         puzzle_id = None
@@ -29,5 +29,5 @@ class BoxOfficeParser(GameParser):
                     score = float(match.group(1))
         
         if puzzle_id and score is not None:
-            return puzzle_id, score
+            return puzzle_id, score, None, None
         return None

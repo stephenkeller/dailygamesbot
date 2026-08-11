@@ -19,7 +19,7 @@ class CluesBySamParser(GameParser):
     def can_parse(self, text: str) -> bool:
         return "#CluesBySam" in text
 
-    def parse(self, text: str, message_date: datetime) -> Optional[Tuple[str, float]]:
+    def parse(self, text: str, message_date: datetime) -> Optional[Tuple[str, float, Optional[float], Optional[float]]]:
         # Format 1: #CluesBySam - Jul 24th 2026 (Tricky) \n Less than 23 minutes
         # Format 2: I solved the daily #CluesBySam, Aug 10th 2026 (Easy), in 03:01
         
@@ -52,6 +52,13 @@ class CluesBySamParser(GameParser):
             score = float(minutes * 60 + seconds)
             
         if puzzle_id and score is not None:
-            return puzzle_id, score
+            # Count penalties
+            yellow_squares = text.count('🟨')
+            yellow_circles = text.count('🟡')
+            
+            penalty = (yellow_squares * 60.0) + (yellow_circles * 90.0)
+            total_score = score + penalty
+            
+            return puzzle_id, float(total_score), float(score), float(penalty)
             
         return None

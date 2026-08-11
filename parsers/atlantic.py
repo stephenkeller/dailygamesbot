@@ -19,7 +19,7 @@ class AtlanticCrosswordParser(GameParser):
     def can_parse(self, text: str) -> bool:
         return "I completed the Crossword in" in text and "The Atlantic" in text
 
-    def parse(self, text: str, message_date: datetime) -> Optional[Tuple[str, float]]:
+    def parse(self, text: str, message_date: datetime) -> Optional[Tuple[str, float, Optional[float], Optional[float]]]:
         # Example: "I completed the Crossword in 36 seconds!"
         # Or: "I completed the Crossword in 1 minute and 36 seconds!"
         
@@ -58,6 +58,6 @@ class AtlanticCrosswordParser(GameParser):
                 # We don't have a puzzle ID in the text, so use the message date
                 puzzle_id = message_date.strftime("%Y-%m-%d")
                 
-            return puzzle_id, float(total_seconds)
+            return puzzle_id, float(total_seconds), None, None
             
         return None
