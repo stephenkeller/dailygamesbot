@@ -1,5 +1,10 @@
 import aiosqlite
 import logging
+from collections import defaultdict
+from typing import Dict, List, Tuple
+import re
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import os
 
 os.makedirs("data", exist_ok=True)
@@ -26,8 +31,6 @@ async def init_db():
         ''')
         
         # Migration: fix old Clues By Sam dates
-        import re
-        from datetime import datetime
         cursor = await db.execute("SELECT user_id, game_name, puzzle_id FROM scores WHERE game_name = 'Clues By Sam'")
         rows = await cursor.fetchall()
         for row in rows:
@@ -43,6 +46,23 @@ async def init_db():
                 except ValueError:
                     pass
                     
+        # Migration: Box Office Game repeats
+        cursor = await db.execute("SELECT puzzle_id, MIN(date) FROM scores WHERE game_name = 'Box Office Game' AND puzzle_id NOT LIKE '%|%' GROUP BY puzzle_id")
+        rows = await cursor.fetchall()
+        for row in rows:
+            old_puzzle_id = row[0]
+            try:
+                dt = datetime.strptime(row[1], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                eastern_dt = dt.astimezone(ZoneInfo("America/New_York"))
+                new_date_str = eastern_dt.strftime("%Y-%m-%d")
+            except Exception:
+                new_date_str = row[1][:10]
+            new_puzzle_id = f"{old_puzzle_id}|{new_date_str}"
+            await db.execute(
+                "UPDATE OR REPLACE scores SET puzzle_id = ? WHERE game_name = 'Box Office Game' AND puzzle_id = ?",
+                (new_puzzle_id, old_puzzle_id)
+            )
+
         await db.commit()
     logging.info("Database initialized.")
 
@@ -277,3 +297,26 @@ async def get_user_scores(user_id: str, limit: int = 15):
             LIMIT ?
         ''', (user_id, limit))
         return await cursor.fetchall()
+
+async def resolve_box_office_puzzle_id(movie_date: str) -> str:
+    """Groups Box Office Game repeats if they occur within 7 days in Eastern Time."""
+    async with aiosqlite.connect(DB_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT puzzle_id, MAX(date) as last_played FROM scores WHERE game_name = 'Box Office Game' AND puzzle_id LIKE ? GROUP BY puzzle_id ORDER BY last_played DESC LIMIT 1",
+            (f"{movie_date}|%",)
+        )
+        row = await cursor.fetchone()
+        
+        eastern = ZoneInfo("America/New_York")
+        now_eastern = datetime.now(timezone.utc).astimezone(eastern)
+        
+        if row:
+            last_played_str = row['last_played']
+            last_played_utc = datetime.strptime(last_played_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            last_played_eastern = last_played_utc.astimezone(eastern)
+            
+            if (now_eastern - last_played_eastern).days <= 7:
+                return row['puzzle_id']
+                
+        return f"{movie_date}|{now_eastern.strftime('%Y-%m-%d')}"

@@ -58,6 +58,9 @@ async def on_message(message: discord.Message):
             result = parser.parse(text, message.created_at)
             if result:
                 puzzle_id, score = result
+                if parser.game_name == "Box Office Game":
+                    puzzle_id = await database.resolve_box_office_puzzle_id(puzzle_id)
+                    
                 await database.record_score(
                     str(message.author.id),
                     message.author.display_name,
@@ -86,7 +89,8 @@ async def on_message(message: discord.Message):
                 # Fetch daily leaderboard and reply
                 daily_ranks = await database.get_puzzle_leaderboard(parser.game_name, puzzle_id, parser.ascending)
                 if daily_ranks:
-                    embed = discord.Embed(title=f"Daily Rank: {parser.game_name} ({puzzle_id})", color=discord.Color.green())
+                    display_puzzle = puzzle_id.split("|")[0] if "|" in puzzle_id else puzzle_id
+                    embed = discord.Embed(title=f"Daily Rank: {parser.game_name} ({display_puzzle})", color=discord.Color.green())
                     
                     # Track rank with ties
                     current_rank = 1
@@ -282,7 +286,8 @@ async def user_scores(interaction: discord.Interaction, user: discord.Member):
             else:
                 score_display = f"{score:.0f}s"
                 
-        embed.add_field(name=f"{game}", value=f"Puzzle: `{puzzle}`\\nScore: {score_display}", inline=False)
+        display_puzzle = puzzle.split("|")[0] if "|" in puzzle else puzzle
+        embed.add_field(name=f"{game}", value=f"Puzzle: `{display_puzzle}`\\nScore: {score_display}", inline=False)
         
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
