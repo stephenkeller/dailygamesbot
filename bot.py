@@ -9,6 +9,7 @@ from parsers.boxoffice import BoxOfficeParser
 from parsers.atlantic import AtlanticCrosswordParser
 from parsers.timeline import TimelineParser
 from parsers.cluesbysam import CluesBySamParser
+from parsers.enclosehorse import EncloseHorseParser
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -18,7 +19,8 @@ parsers = [
     BoxOfficeParser(),
     AtlanticCrosswordParser(),
     TimelineParser(),
-    CluesBySamParser()
+    CluesBySamParser(),
+    EncloseHorseParser()
 ]
 
 # Map channel names to game names
@@ -26,7 +28,8 @@ CHANNEL_GAME_MAP = {
     "timeline": "Timeline",
     "clues-by-sam": "Clues By Sam",
     "crossword": "Atlantic Daily Crossword",
-    "box-office-game": "Box Office Game"
+    "box-office-game": "Box Office Game",
+    "enclose-horse": "Enclose.Horse"
 }
 
 def format_time_val(s: float) -> str:
@@ -34,8 +37,12 @@ def format_time_val(s: float) -> str:
         return f"{int(s // 60)}m {int(s % 60)}s"
     return f"{s:.0f}s"
 
-def format_score_display(score: float, raw_score=None, penalty=None, ascending: bool=False) -> str:
+def format_score_display(score: float, raw_score=None, penalty=None, ascending: bool=False, game_name: str="") -> str:
     display_val = f"{score:.0f}" if float(score).is_integer() else f"{score:.2f}"
+    
+    if game_name == "Enclose.Horse":
+        display_val = f"{display_val}%"
+        
     if ascending:
         display_val = format_time_val(score)
         if penalty and float(penalty) > 0 and raw_score:
@@ -123,7 +130,7 @@ async def on_message(message: discord.Message):
                         
                         raw_score = row['raw_score'] if 'raw_score' in row.keys() else None
                         penalty = row['penalty'] if 'penalty' in row.keys() else None
-                        display_val = format_score_display(row['score'], raw_score, penalty, parser.ascending)
+                        display_val = format_score_display(row['score'], raw_score, penalty, parser.ascending, parser.game_name)
                                 
                         user_str = f"**{row['username']}**" if row['user_id'] == str(message.author.id) else row['username']
                         desc += f"{medal} {user_str} : {display_val}\n"
@@ -158,7 +165,7 @@ async def build_leaderboard_embed(parser):
                 day_medal_str = f"🥇{day_medals['1st']} 🥈{day_medals['2nd']} 🥉{day_medals['3rd']}"
                 avg_raw = row['avg_raw'] if 'avg_raw' in row.keys() else None
                 avg_pen = row['avg_penalty'] if 'avg_penalty' in row.keys() else None
-                score_display = format_score_display(avg_score, avg_raw, avg_pen, parser.ascending)
+                score_display = format_score_display(avg_score, avg_raw, avg_pen, parser.ascending, parser.game_name)
                         
                 rank = "🏆" if i == 0 else f"#{i+1}"
                 day_text += f"{rank} **{username}** • {day_medal_str}\nAvg: {score_display} ({plays} plays)\n\n"
@@ -178,7 +185,7 @@ async def build_leaderboard_embed(parser):
                     glob_medal_str = f"🥇{global_medals['1st']} 🥈{global_medals['2nd']} 🥉{global_medals['3rd']}"
                     avg_raw = row['avg_raw'] if 'avg_raw' in row.keys() else None
                     avg_pen = row['avg_penalty'] if 'avg_penalty' in row.keys() else None
-                    score_display = format_score_display(avg_score, avg_raw, avg_pen, parser.ascending)
+                    score_display = format_score_display(avg_score, avg_raw, avg_pen, parser.ascending, parser.game_name)
                             
                     rank = "🏆" if i == 0 else f"#{i+1}"
                     global_text += f"{rank} **{username}** • {glob_medal_str}\nAvg: {score_display} ({plays} plays)\n\n"
@@ -286,7 +293,7 @@ async def user_scores(interaction: discord.Interaction, user: discord.Member):
         penalty = row['penalty'] if 'penalty' in row.keys() else None
         
         is_ascending = game in ["Clues By Sam", "Atlantic Daily Crossword"]
-        score_display = format_score_display(score, raw_score, penalty, is_ascending)
+        score_display = format_score_display(score, raw_score, penalty, is_ascending, game)
                 
         display_puzzle = puzzle.split("|")[0] if "|" in puzzle else puzzle
         embed.add_field(name=f"{game}", value=f"Puzzle: `{display_puzzle}`\nScore: {score_display}", inline=False)
