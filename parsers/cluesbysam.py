@@ -41,7 +41,7 @@ class CluesBySamParser(GameParser):
             
         # Extract time
         time_match_1 = re.search(r'Less than (\d+) minutes?', text, re.IGNORECASE)
-        time_match_2 = re.search(r'in (\d{1,2}):(\d{2})', text, re.IGNORECASE)
+        time_match_2 = re.search(r'\b(\d{1,2}):(\d{2})\b', text)
         
         if time_match_1:
             minutes = int(time_match_1.group(1))
