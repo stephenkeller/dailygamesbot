@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
+from zoneinfo import ZoneInfo
 
 import database
 from parsers.boxoffice import BoxOfficeParser
@@ -77,7 +78,9 @@ async def on_message(message: discord.Message):
         
     for parser in parsers:
         if parser.can_parse(text):
-            result = parser.parse(text, message.created_at)
+            eastern = ZoneInfo("America/New_York")
+            message_date_eastern = message.created_at.astimezone(eastern)
+            result = parser.parse(text, message_date_eastern)
             if result:
                 puzzle_id, score, raw_score, penalty = result
                 if parser.game_name == "Box Office Game":
