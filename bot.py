@@ -11,6 +11,7 @@ from parsers.atlantic import AtlanticCrosswordParser
 from parsers.timeline import TimelineParser
 from parsers.cluesbysam import CluesBySamParser
 from parsers.enclosehorse import EncloseHorseParser
+from parsers.bracketcity import BracketCityParser, BracketCityHardParser
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -21,7 +22,9 @@ parsers = [
     AtlanticCrosswordParser(),
     TimelineParser(),
     CluesBySamParser(),
-    EncloseHorseParser()
+    EncloseHorseParser(),
+    BracketCityParser(),
+    BracketCityHardParser()
 ]
 
 # Map channel names to game names
@@ -30,7 +33,8 @@ CHANNEL_GAME_MAP = {
     "clues-by-sam": "Clues By Sam",
     "crossword": "Atlantic Daily Crossword",
     "box-office-game": "Box Office Game",
-    "enclose-horse": "Enclose.Horse"
+    "enclose-horse": "Enclose.Horse",
+    "bracket-city": "Bracket City"
 }
 
 def format_time_val(s: float) -> str:
