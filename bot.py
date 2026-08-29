@@ -279,12 +279,21 @@ async def leaderboard(interaction: discord.Interaction, game: str = None, sort_b
 
 @bot.command(name="leaderboard")
 async def leaderboard_cmd(ctx, *, game: str = None):
+    sort_by = "Average Score"
+    if game and game.lower().endswith("medals"):
+        sort_by = "Medals"
+        game = game[:-6].strip()
+        if game.endswith("-"):
+            game = game[:-1].strip()
+        if not game:
+            game = None
+
     if not game:
         channel_name = ctx.channel.name.lower() if ctx.channel else ""
         if channel_name in CHANNEL_GAME_MAP:
             game = CHANNEL_GAME_MAP[channel_name]
         else:
-            await ctx.send("Please specify a game! Example: `!leaderboard Box Office Game`")
+            await ctx.send("Please specify a game! Example: `!leaderboard Box Office Game` or `!leaderboard medals`")
             return
         
     parser = next((p for p in parsers if p.game_name.lower() == game.lower()), None)
@@ -293,7 +302,7 @@ async def leaderboard_cmd(ctx, *, game: str = None):
         await ctx.send(f"Game not found. Supported games: {supported}")
         return
         
-    embed = await build_leaderboard_embed(parser)
+    embed = await build_leaderboard_embed(parser, sort_by)
     if not embed:
         await ctx.send(f"No scores recorded for {parser.game_name} yet.")
         return
