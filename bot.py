@@ -34,7 +34,7 @@ CHANNEL_GAME_MAP = {
     "crossword": "Atlantic Daily Crossword",
     "box-office-game": "Box Office Game",
     "enclose-horse": "Enclose.Horse",
-    "bracket-city": "Bracket City"
+    "bracket-city": "Bracket City (Hard Mode)"
 }
 
 def format_time_val(s: float) -> str:
