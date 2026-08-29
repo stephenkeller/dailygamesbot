@@ -1,4 +1,5 @@
 import os
+import typing
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -148,7 +149,7 @@ async def on_message(message: discord.Message):
                 
     await bot.process_commands(message)
 
-async def build_leaderboard_embed(parser):
+async def build_leaderboard_embed(parser, sort_by="Average Score"):
     if parser.bucket_by_day:
         bucketed_rows = await database.get_bucketed_leaderboard(parser.game_name, parser.ascending)
         medals_data = await database.get_bucketed_medal_counts(parser.game_name, parser.ascending)
@@ -161,6 +162,14 @@ async def build_leaderboard_embed(parser):
             rows = bucketed_rows.get(day, [])
             if not rows: continue
             has_any = True
+            
+            if sort_by == "Medals":
+                rows.sort(key=lambda r: (
+                    -medals_data.get(r['username'], {}).get(day, {}).get('1st', 0),
+                    -medals_data.get(r['username'], {}).get(day, {}).get('2nd', 0),
+                    -medals_data.get(r['username'], {}).get(day, {}).get('3rd', 0),
+                    r['avg_score'] if parser.ascending else -r['avg_score']
+                ))
             
             day_text = ""
             for i, row in enumerate(rows):
@@ -183,6 +192,14 @@ async def build_leaderboard_embed(parser):
             global_rows = await database.get_leaderboard(parser.game_name, parser.ascending)
             if global_rows:
                 global_text = ""
+                
+                if sort_by == "Medals":
+                    global_rows.sort(key=lambda r: (
+                        -medals_data.get(r['username'], {}).get('global', {}).get('1st', 0),
+                        -medals_data.get(r['username'], {}).get('global', {}).get('2nd', 0),
+                        -medals_data.get(r['username'], {}).get('global', {}).get('3rd', 0),
+                        r['avg_score'] if parser.ascending else -r['avg_score']
+                    ))
                 for i, row in enumerate(global_rows):
                     username = row['username']
                     plays = row['plays']
@@ -207,6 +224,14 @@ async def build_leaderboard_embed(parser):
         medals_data = await database.get_medal_counts(parser.game_name, parser.ascending)
         embed = discord.Embed(title=f"Leaderboard: {parser.game_name}", color=discord.Color.gold())
         
+        if sort_by == "Medals":
+            rows.sort(key=lambda r: (
+                -medals_data.get(r['username'], {}).get('1st', 0),
+                -medals_data.get(r['username'], {}).get('2nd', 0),
+                -medals_data.get(r['username'], {}).get('3rd', 0),
+                r['avg_score'] if parser.ascending else -r['avg_score']
+            ))
+        
         for i, row in enumerate(rows):
             username = row['username']
             plays = row['plays']
@@ -228,8 +253,8 @@ async def build_leaderboard_embed(parser):
         return embed
 
 @bot.tree.command(name="leaderboard", description="Show the leaderboard for a specific game")
-@app_commands.describe(game="The name of the game (e.g., 'Box Office Game', 'Timeline')")
-async def leaderboard(interaction: discord.Interaction, game: str = None):
+@app_commands.describe(game="The name of the game (e.g., 'Box Office Game', 'Timeline')", sort_by="How to sort the leaderboard")
+async def leaderboard(interaction: discord.Interaction, game: str = None, sort_by: typing.Literal['Average Score', 'Medals'] = 'Average Score'):
     if not game:
         channel_name = interaction.channel.name.lower() if interaction.channel else ""
         if channel_name in CHANNEL_GAME_MAP:
@@ -245,7 +270,7 @@ async def leaderboard(interaction: discord.Interaction, game: str = None):
         await interaction.response.send_message(f"Game not found. Supported games: {supported}")
         return
         
-    embed = await build_leaderboard_embed(parser)
+    embed = await build_leaderboard_embed(parser, sort_by)
     if not embed:
         await interaction.response.send_message(f"No scores recorded for {parser.game_name} yet.")
         return
