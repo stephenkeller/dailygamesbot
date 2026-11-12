@@ -361,7 +361,7 @@ export class DiscordGateway extends DurableObject<Env> {
     await handleMessage(this.env, message, { channelName: channel?.name, silent: false });
 
     // Move the channel's catch-up marker, unless a catch-up is working through it now.
-    if (channel && isGameChannel(channel) && !this.catchingUp) {
+    if (channel && isGameChannel(channel) && !this.catchingUp && this.env.BACKFILL_PAUSED !== "true") {
       await this.ctx.storage.put(`cursor:${message.channel_id}`, message.id);
     }
   }
@@ -373,7 +373,9 @@ export class DiscordGateway extends DurableObject<Env> {
    * whole history, which is how scores missed before the move get picked up.
    */
   private async catchUp(): Promise<void> {
-    if (this.catchingUp) return;
+    // BACKFILL_PAUSED (wrangler.jsonc) switches history reading off; cursors are kept, so
+    // clearing it carries on from where each channel stopped.
+    if (this.catchingUp || this.env.BACKFILL_PAUSED === "true") return;
     this.catchingUp = true;
     this.catchUpUnfinished = false;
     try {

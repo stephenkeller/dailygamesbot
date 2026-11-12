@@ -13,6 +13,8 @@ export interface Env {
   /** Test only: point the bot at a stand-in for Discord (scripts/fake-discord.mjs). */
   DISCORD_API_URL?: string;
   DISCORD_GATEWAY_URL?: string;
+  /** "true" stops the bot reading channel history (set in wrangler.jsonc). */
+  BACKFILL_PAUSED?: string;
 }
 
 const API = "https://discord.com/api/v10";
