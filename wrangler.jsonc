@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dailygames-bot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+
+  // Served only at dailygames.skeller.dev. Cloudflare Access keeps the hostname private
+  // to the owner, except /api/*, which is open so Discord can deliver slash commands
+  // (the Worker checks Discord's signature on each one).
+  "routes": [{ "pattern": "dailygames.skeller.dev", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "observability": { "enabled": true },
+
+  // Every minute: make sure the Gateway connection is up. The Durable Object's own
+  // alarm normally keeps it alive; this starts it the first time and is the backstop.
+  "triggers": { "crons": ["* * * * *"] },
+
+  // Holds the bot's WebSocket connection to Discord (src/gateway.ts).
+  "durable_objects": {
+    "bindings": [{ "name": "GATEWAY", "class_name": "DiscordGateway" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DiscordGateway"] }],
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dailygames-db",
+      "database_id": "78047cf6-6e81-4ffe-a283-dc82a5da84fe",
+      "migrations_dir": "migrations"
+    }
+  ]
+
+  // Secrets (wrangler secret put): DISCORD_TOKEN, DISCORD_PUBLIC_KEY.
+}
