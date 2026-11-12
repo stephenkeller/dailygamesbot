@@ -16,7 +16,7 @@
   // "true" pauses reading channel history (the catch-up after reconnects and the
   // first-run backfill). Live messages and commands are unaffected. Set to "false" to
   // resume from where each channel stopped.
-  "vars": { "BACKFILL_PAUSED": "true" },
+  "vars": { "BACKFILL_PAUSED": "false" },
 
   // Every minute: make sure the Gateway connection is up. The Durable Object's own
   // alarm normally keeps it alive; this starts it the first time and is the backstop.

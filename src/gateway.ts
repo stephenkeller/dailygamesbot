@@ -361,7 +361,8 @@ export class DiscordGateway extends DurableObject<Env> {
     await handleMessage(this.env, message, { channelName: channel?.name, silent: false });
 
     // Move the channel's catch-up marker, unless a catch-up is working through it now.
-    if (channel && isGameChannel(channel) && !this.catchingUp && this.env.BACKFILL_PAUSED !== "true") {
+    if (channel && isGameChannel(channel) && !this.catchingUp && !this.catchUpUnfinished
+      && this.env.BACKFILL_PAUSED !== "true") {
       await this.ctx.storage.put(`cursor:${message.channel_id}`, message.id);
     }
   }
